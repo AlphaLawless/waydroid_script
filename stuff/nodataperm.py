@@ -1,6 +1,7 @@
 import os
 import re
 import shutil
+import sys
 from stuff.general import General
 from tools.helper import backup, restore
 from tools.logger import Logger
@@ -38,12 +39,21 @@ class Nodataperm(General):
 
     def __init__(self, android_version="11") -> None:
         super().__init__()
-        print("ok")
         arch = self.arch[0]
+        # Report an unsupported combination the way the rest of the codebase
+        # does — a message and an exit — instead of a KeyError traceback. The
+        # hack is only published for x86_64, so every ARM user hit the raise.
         if android_version not in self.dl_links:
-            raise KeyError(f"No download links for Android version '{android_version}'")
+            Logger.error(
+                "nodataperm is not available for Android {}".format(android_version))
+            sys.exit(1)
         if arch not in self.dl_links[android_version]:
-            raise KeyError(f"No download links for architecture '{arch}' in Android version '{android_version}'")
+            Logger.error(
+                "nodataperm is not available for {} on Android {} "
+                "(only {} is)".format(
+                    arch, android_version,
+                    ", ".join(sorted(self.dl_links[android_version]))))
+            sys.exit(1)
         self.dl_link = self.dl_links[android_version][arch][0]
         self.act_md5 = self.dl_links[android_version][arch][1]
 
