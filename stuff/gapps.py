@@ -1,7 +1,7 @@
 import os
 import shutil
 from stuff.general import General
-from tools.helper import run
+from tools.helper import run, tar_lzip_command
 
 
 class Gapps(General):
@@ -123,8 +123,9 @@ class Gapps(General):
                 if lz_file not in self.non_apks:
                     print("    Processing app package : " +
                           os.path.join(self.extract_to, "Core", lz_file))
-                    run(["tar", "--lzip", "-xvf", os.path.join(self.extract_to, "Core",
-                        lz_file), "-C", os.path.join(self.extract_to, "appunpack")])
+                    run(tar_lzip_command(
+                        os.path.join(self.extract_to, "Core", lz_file),
+                        os.path.join(self.extract_to, "appunpack")))
                     app_name = os.listdir(os.path.join(
                         self.extract_to, "appunpack"))[0]
                     xx_dpi = os.listdir(os.path.join(
@@ -144,8 +145,9 @@ class Gapps(General):
                 else:
                     print("    Processing extra package : " +
                           os.path.join(self.extract_to, "Core", lz_file))
-                    run(["tar", "--lzip", "-xvf", os.path.join(self.extract_to, "Core",
-                        lz_file), "-C", os.path.join(self.extract_to, "appunpack")])
+                    run(tar_lzip_command(
+                        os.path.join(self.extract_to, "Core", lz_file),
+                        os.path.join(self.extract_to, "appunpack")))
                     app_name = os.listdir(os.path.join(
                         self.extract_to, "appunpack"))[0]
                     common_content_dirs = os.listdir(os.path.join(

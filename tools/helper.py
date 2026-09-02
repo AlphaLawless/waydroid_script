@@ -154,6 +154,47 @@ def host():
                      " architecture is not supported")
 
 
+def env_binary(name: str) -> str:
+    """Absolute path to a binary that must come from this interpreter's env.
+
+    Only two binaries have to be the ones the lockfile pinned: lzip and tar.
+    Everything else the script shells out to (mount, umount, mountpoint,
+    e2fsck, resize2fs, waydroid, openssl) is a host tool and is resolved
+    through PATH as before.
+
+    Resolving by absolute path rather than by PATH is what lets this program
+    keep running under a plain `sudo`. sudo's env_reset replaces PATH with
+    secure_path, so anything found through PATH inside a sudo'd process comes
+    from the host, not from the environment the lockfile describes. Forwarding
+    PATH across that boundary would work, but it also strips /usr/sbin and
+    /sbin on Debian and Ubuntu (where a regular user's PATH does not include
+    them), breaking e2fsck. An absolute path cannot be defeated by PATH at
+    all, and it leaves secure_path intact for every host tool.
+
+    Falls back to the bare name when the binary is not in the env, so a
+    checkout run outside pixi still behaves the way it did before.
+    """
+    candidate = os.path.join(sys.prefix, "bin", name)
+    return candidate if os.path.isfile(candidate) else name
+
+
+def tar_lzip_command(archive: str, dest: str) -> list:
+    """argv that extracts a .tar.lz using the env's own tar and lzip.
+
+    `tar --lzip` shells out to lzip through PATH, so pinning tar alone is not
+    enough: under sudo it would find the host's lzip, or none at all. Verified
+    on a machine with no host lzip:
+
+        tar --lzip -xf a.tar.lz            -> tar (child): lzip: Cannot exec
+        tar --use-compress-program=<abs>   -> extracts
+
+    --use-compress-program is the only form that pins the compressor too.
+    """
+    return [env_binary("tar"),
+            "--use-compress-program=" + env_binary("lzip"),
+            "-xvf", archive, "-C", dest]
+
+
 def check_root():
     if os.geteuid() != 0:
         Logger.error("This script must be run as root. Aborting.")
