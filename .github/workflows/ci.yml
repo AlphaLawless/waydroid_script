@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # A lockfile nobody resolves rots quietly: a channel drops a build, a
+  # package is removed, and the first person to notice is a user. Weekly.
+  schedule:
+    - cron: "0 6 * * 1"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: prefix-dev/setup-pixi@v0
+        with:
+          # Fail if pixi.lock does not already satisfy pixi.toml, rather than
+          # silently resolving something new and testing that instead.
+          frozen: true
+          environments: test
+
+      - name: Environment resolves and pins what it claims to
+        run: |
+          pixi run -e test python -c "
+          import sys, os
+          sys.path.insert(0, '.')
+          from tools.helper import env_binary
+          for name in ('lzip', 'tar'):
+              path = env_binary(name)
+              assert path.startswith(sys.prefix), f'{name} resolved to {path}'
+              print(f'{name}: {path}')
+          # Host tools must NOT be pulled into the environment.
+          for name in ('e2fsck', 'mount', 'waydroid'):
+              assert env_binary(name) == name, f'{name} should stay a host tool'
+          "
+
+      - name: Tests
+        run: pixi run -e test pytest -q
+
+      - name: CLI starts
+        run: |
+          pixi run -e test python main.py --help
+          pixi run -e test python main.py install --help
+
+      - name: No inner sudo left in any argv
+        # check_root() guarantees the process is already root by the time these
+        # run, so an inner sudo would only send the child through env_reset and
+        # lose the environment the lockfile pinned.
+        #
+        # Matches an argv list opening with sudo — ["sudo", ...] — rather than
+        # the bare word, which also appears in comments and help strings.
+        run: |
+          if grep -rnE '\[\s*"sudo"' main.py tools/ stuff/ --include="*.py"; then
+            echo "::error::found a literal \"sudo\" opening a subprocess argv"
+            exit 1
+          fi
+          echo "clean"
+
+  lock:
+    # Resolving unfrozen tells us the lockfile could still be regenerated from
+    # scratch today, which is a different question from whether it is current.
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: prefix-dev/setup-pixi@v0
+        with:
+          locked: false
+      - run: pixi install
