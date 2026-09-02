@@ -283,16 +283,36 @@ def main():
     Does stuff like installing Gapps, installing Magisk, installing NDK Translation and getting Android ID for device registration.
     Use -h  flag for help!''')
 
-    subparsers = parser.add_subparsers(title="coomand", dest='command')
+    # -a lives on a parent parser so it works both before and after the
+    # subcommand. Declared only on the top-level parser it was reachable as
+    # `main.py -a 11 install gapps` but not as `main.py install -a 11 gapps`,
+    # and the latter is exactly the shape any wrapper produces — including the
+    # pixi tasks this repository now ships.
+    #
+    # default=SUPPRESS is load-bearing: without it the subparser overwrites the
+    # value parsed by the top-level parser with its own default, so
+    # `main.py -a 11 install gapps` would silently fall back to 13. With
+    # SUPPRESS the attribute is set only where the flag actually appeared,
+    # hence the getattr() below.
+    android_version_parser = argparse.ArgumentParser(add_help=False)
+    android_version_parser.add_argument('-a', '--android-version',
+                                        dest='android_version',
+                                        help='Specify the Android version',
+                                        default=argparse.SUPPRESS,
+                                        choices=["11", "13"])
+
     parser.add_argument('-a', '--android-version',
                         dest='android_version',
                         help='Specify the Android version',
-                        default="13",
+                        default=argparse.SUPPRESS,
                         choices=["11", "13"])
+
+    subparsers = parser.add_subparsers(title="coomand", dest='command')
 
     # android command
     certified = subparsers.add_parser(
-        'certified', help='Get device ID to obtain Play Store certification')
+        'certified', parents=[android_version_parser],
+        help='Get device ID to obtain Play Store certification')
     certified.set_defaults(func=get_certified)
 
     install_choices = ["gapps", "microg", "libndk", "libhoudini",
@@ -320,7 +340,8 @@ widevine: Add support for widevine DRM L3
     """
     # install and its aliases
     install_parser = subparsers.add_parser(
-        'install', formatter_class=argparse.RawTextHelpFormatter, help='Install an app')
+        'install', parents=[android_version_parser],
+        formatter_class=argparse.RawTextHelpFormatter, help='Install an app')
     install_parser.add_argument(
         **arg_template, choices=install_choices, help=install_help)
     install_parser.add_argument('-c', '--ca-cert',
@@ -331,18 +352,26 @@ widevine: Add support for widevine DRM L3
 
     # remove and its aliases
     remove_parser = subparsers.add_parser(
-        'remove', aliases=["uninstall"], help='Remove an app')
+        'remove', aliases=["uninstall"], parents=[android_version_parser],
+        help='Remove an app')
     remove_parser.add_argument(
         **arg_template, choices=[*remove_choices, * hack_choices], help='Name of app to remove')
     remove_parser.set_defaults(func=remove_app)
 
     # hack and its aliases
-    hack_parser = subparsers.add_parser('hack', help='Hack the system')
+    hack_parser = subparsers.add_parser('hack', parents=[android_version_parser],
+                                        help='Hack the system')
     hack_parser.add_argument(
         'option_name', nargs="+", choices=hack_choices, help='Name of hack option')
     hack_parser.set_defaults(func=hack_option)
 
     args = parser.parse_args()
+    # -a is declared with default=SUPPRESS on both the top-level parser and the
+    # parent shared by every subparser, so that whichever one sees the flag
+    # wins and neither clobbers the other. The cost is that the attribute is
+    # absent when the flag was not passed at all; apply the default here.
+    if not hasattr(args, "android_version"):
+        args.android_version = "13"
     args.microg_variant = "Standard"
     if hasattr(args, 'func'):
         args_dict = vars(args)
