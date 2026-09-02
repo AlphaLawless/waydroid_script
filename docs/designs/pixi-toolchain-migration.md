@@ -779,7 +779,7 @@ Conflito a vigiar: `c6` toca testes que exercitam código de A, então espera A 
 | OQ-SECUREPATH | **Irrelevante.** Não há mais propagação de PATH |
 | OQ-DOAS | **Irrelevante.** Não há mais auto-elevação |
 | OQ-PLATAFORMAS | **Aceita.** Host x86 de 32 bits ou ARMv7 em 2026 é hipotético. Documentar em uma linha |
-| OQ-REQUIREMENTS | **Aberta.** Manter `requirements.txt` como ponte, ou remover? |
+| OQ-REQUIREMENTS | **Fechada no commit c9.** Removido. Três nomes sem versão nem lock, e o README não o cita mais; manter seria uma segunda fonte de verdade que ninguém atualiza. Se a ponte fizer falta, gerar a partir do `pixi.lock` |
 | Deps do PR #269 | **Fechada.** `dbus`/`gbinder`/`PyGObject` não são usados; só um `# import dbus` comentado |
 | `ubuntu-latest` tem sbin no PATH? | **Aberta, agora inócua.** Sem propagação de PATH, não importa |
 
@@ -796,5 +796,4 @@ Conflito a vigiar: `c6` toca testes que exercitam código de A, então espera A 
 - **CROSS-MODEL:** voz externa levantou 11 achados; 7 verificados na máquina, 2 não verificáveis aqui, 1 corrigido pelo probe (`tar` absoluto não basta — precisa de `--use-compress-program`). Três tensões foram à decisão do usuário: Approach C revertida, semântica do `run()` endurecida, ordem do trabalho mantida.
 - **VERDICT:** ENG REVIEW COMPLETO — plano revisado, 9 commits definidos, escopo de teste fechado. Aprovado para implementar.
 
-**UNRESOLVED DECISIONS:**
-- OQ-REQUIREMENTS: manter `requirements.txt` como ponte para quem chega por links antigos, ou remover junto com o Nix? Decidir no commit c9.
+NO UNRESOLVED DECISIONS
