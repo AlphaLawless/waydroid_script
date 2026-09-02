@@ -1,0 +1,47 @@
+[workspace]
+name = "waydroid_script"
+version = "0.1.0"
+description = "Install Gapps, Magisk, ARM translation and more into a Waydroid container"
+channels = ["conda-forge"]
+platforms = ["linux-64", "linux-aarch64"]
+# Declared here rather than in the README so pixi itself refuses to run on a
+# version that cannot read this manifest, instead of failing with a confusing
+# unknown-field error. 0.55 is the version this was built and tested against.
+requires-pixi = ">=0.55"
+
+[dependencies]
+# Pinned to a minor series so a distro upgrading its own Python cannot break
+# this checkout. That is the failure the venv path had on rolling releases.
+python = "3.12.*"
+tqdm = "*"
+requests = "*"
+inquirerpy = "*"
+# lzip and tar are the only host binaries this project needs to match the
+# lockfile; tools/helper.py resolves them by absolute path out of this env.
+# Everything else it shells out to (mount, umount, mountpoint, e2fsck,
+# resize2fs, waydroid, openssl) stays a host dependency.
+lzip = "*"
+tar = "*"
+
+[feature.test.dependencies]
+pytest = "*"
+
+[environments]
+test = ["test"]
+
+# Every task elevates through sudo internally so the published command stays
+# short. sudo is invoked with the interpreter's absolute path, which keeps
+# sudo's own secure_path intact for every host tool the script calls.
+#
+# Never prefix these with sudo yourself: `sudo pixi run ...` makes root the
+# owner of .pixi/ and breaks every later `pixi install`.
+[tasks]
+menu      = "sudo $PIXI_PROJECT_ROOT/.pixi/envs/default/bin/python main.py"
+install   = "sudo $PIXI_PROJECT_ROOT/.pixi/envs/default/bin/python main.py install"
+remove    = "sudo $PIXI_PROJECT_ROOT/.pixi/envs/default/bin/python main.py remove"
+uninstall = "sudo $PIXI_PROJECT_ROOT/.pixi/envs/default/bin/python main.py uninstall"
+certified = "sudo $PIXI_PROJECT_ROOT/.pixi/envs/default/bin/python main.py certified"
+hack      = "sudo $PIXI_PROJECT_ROOT/.pixi/envs/default/bin/python main.py hack"
+
+[feature.test.tasks]
+test = "pytest -q"
