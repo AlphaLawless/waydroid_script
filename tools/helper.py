@@ -1,15 +1,13 @@
 import gzip
 import os
-import re
 import platform
-import re
 import subprocess
 import sys
 import requests
 from tools.logger import Logger
 from tqdm import tqdm
 import hashlib
-from typing import Optional
+from typing import Iterable, Mapping, Optional
 
 
 def get_download_dir():
@@ -31,20 +29,34 @@ def get_data_dir():
     return os.path.join('/', "home", os.environ.get("SUDO_USER", os.environ["USER"]), ".local", "share", "waydroid", "data")
 
 # execute on host
-def run(args: list, env: Optional[str] = None, ignore: Optional[str] = None):
+def run(args: list, env: Optional[Mapping[str, str]] = None,
+        ok_codes: Iterable[int] = (0,)):
+    """Run a command on the host and raise unless its exit code is allowed.
+
+    Failure is decided by the exit code, never by whether the command wrote
+    anything to stderr. Plenty of well behaved tools print a warning, a
+    progress line or a version banner on stderr and still succeed; treating
+    that as an error is what made this function raise the nonsensical
+    "returned non-zero exit status 0" reported upstream in #202, #251, #271
+    and #277.
+
+    ``ok_codes`` is an allowlist of exit codes the caller considers success.
+    It replaces the previous ``ignore`` regex, which matched the command's
+    stderr text against a pattern pinned to a three component version number
+    and therefore broke as soon as e2fsck reached 1.47.10. An exit code is a
+    number; say so with a number.
+    """
     result = subprocess.run(
-        args=args, 
-        env=env, 
-        stdout=subprocess.PIPE, 
+        args=args,
+        env=env,
+        stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
     )
 
-    # print(result.stdout.decode())
-    if result.stderr:
+    if result.returncode not in ok_codes:
         error = result.stderr.decode("utf-8")
-        if ignore and re.match(ignore, error):
-            return result
-        Logger.error(error)
+        if error:
+            Logger.error(error)
         raise subprocess.CalledProcessError(
             returncode=result.returncode,
             cmd=result.args,
@@ -55,7 +67,12 @@ def run(args: list, env: Optional[str] = None, ignore: Optional[str] = None):
 # execute on waydroid shell
 def shell(arg: str, env: Optional[str] = None):
     a = subprocess.Popen(
-        args=["sudo", "waydroid", "shell"],
+        # No "sudo" prefix: check_root() guarantees this process is already
+        # root, and images.py has always called mount/umount/mountpoint
+        # without one. Dropping it keeps every child in the same environment
+        # as the parent instead of sending three of them through sudo's
+        # env_reset.
+        args=["waydroid", "shell"],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
@@ -79,15 +96,24 @@ def shell(arg: str, env: Optional[str] = None):
         stdin=subprocess.PIPE
     ).communicate()
 
-    a.stdin.close()
-    if a.stderr.read():
-        Logger.error(a.stderr.read().decode('utf-8'))
+    # communicate() drains both pipes and waits, which fixes three bugs the
+    # previous version had stacked on top of each other:
+    #   1. it decided failure from stderr instead of the exit code, same as
+    #      run() did;
+    #   2. it called a.stderr.read() twice, so the message it logged was the
+    #      second (always empty) read;
+    #   3. it never waited, so a.returncode was None and the exception read
+    #      "returned non-zero exit status None".
+    out, err = a.communicate()
+    if a.returncode != 0:
+        if err:
+            Logger.error(err.decode("utf-8"))
         raise subprocess.CalledProcessError(
             returncode=a.returncode,
             cmd=a.args,
-            stderr=a.stderr
+            stderr=err
         )
-    return a.stdout.read().decode("utf-8")
+    return out.decode("utf-8")
 
 def download_file(url, f_name):
     md5 = ""

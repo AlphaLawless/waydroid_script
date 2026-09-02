@@ -50,4 +50,7 @@ def is_running():
         return "Session:\tRUNNING" in run(["waydroid", "status"]).stdout.decode()
 
 def upgrade():
-    run(["waydroid", "upgrade", "-o"], ignore=r"\[.*\] Stopping container\n\[.*\] Starting container")
+    # waydroid narrates "Stopping container" / "Starting container" on stderr
+    # and still exits 0. That used to need an ignore regex; with exit codes
+    # deciding failure it needs nothing.
+    run(["waydroid", "upgrade", "-o"])
