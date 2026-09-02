@@ -215,24 +215,29 @@ def interact():
     if not android_version:
         exit()
     args.android_version = android_version
+    install_choices = ["gapps", "microg", "libndk", "libhoudini", "magisk", "smartdock", "fdroidpriv", "widevine",]
+    hack_choices = []
+    if android_version == "11":
+        hack_choices.extend(["nodataperm", "hidestatusbar"])
+
+    # The hack options only exist for Android 11. Offering the action anyway
+    # led straight to inquirer.checkbox(choices=[]), which raises inside
+    # InquirerPy and leaves the user with a traceback instead of a menu.
+    # Not offering an action that cannot work is better than explaining
+    # afterwards why it did not.
+    actions = ["Install", "Remove"]
+    if hack_choices:
+        actions.append("Hack")
+    actions.append("Get Google Device ID to Get Certified")
+
     action = inquirer.select(
         message="Please select an action",
-        choices=[
-            "Install",
-            "Remove",
-            "Hack",
-            "Get Google Device ID to Get Certified"
-        ],
+        choices=actions,
         instruction="([↑↓]: Select Item)",
         default=None,
     ).execute()
     if not action:
         exit()
-
-    install_choices = ["gapps", "microg", "libndk", "libhoudini", "magisk", "smartdock", "fdroidpriv", "widevine",]
-    hack_choices = []
-    if android_version=="11":
-        hack_choices.extend(["nodataperm", "hidestatusbar"])
 
     if action == "Install":
         apps = inquirer.checkbox(
