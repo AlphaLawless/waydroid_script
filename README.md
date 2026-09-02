@@ -4,14 +4,23 @@ Script to add GApps and other stuff to Waydroid!
 
 # Installation/Usage
 
+This is a maintained fork of [casualsnek/waydroid_script](https://github.com/casualsnek/waydroid_script),
+which has not seen a commit since January 2026.
+
+Requires [pixi](https://pixi.sh) 0.55 or newer. Pixi builds the whole
+environment from `pixi.lock`, including `lzip` — so there is no separate
+dependency step and no distro-specific instructions below.
+
+```bash
+git clone https://github.com/AlphaLawless/waydroid_script
+cd waydroid_script
+pixi install
+```
+
 ## Interactive terminal interface
 
-```
-git clone https://github.com/casualsnek/waydroid_script
-cd waydroid_script
-python3 -m venv venv
-venv/bin/pip install -r requirements.txt
-sudo venv/bin/python3 main.py
+```bash
+pixi run menu
 ```
 
 ![image-20230430013103883](assets/img/README/image-20230430013103883.png)
@@ -25,31 +34,31 @@ sudo venv/bin/python3 main.py
 ## Command Line
 
 ```bash
-git clone https://github.com/casualsnek/waydroid_script
-cd waydroid_script
-python3 -m venv venv
-venv/bin/pip install -r requirements.txt
 # install something
-sudo venv/bin/python3 main.py install {gapps, magisk, libndk, libhoudini, nodataperm, smartdock, microg, mitm}
-# uninstall something
-sudo venv/bin/python3 main.py uninstall {gapps, magisk, libndk, libhoudini, nodataperm, smartdock, microg}
+pixi run install {gapps, magisk, libndk, libhoudini, nodataperm, smartdock, microg, mitm}
+# remove something (uninstall is an alias)
+pixi run remove {gapps, magisk, libndk, libhoudini, nodataperm, smartdock, microg}
 # get Android device ID
-sudo venv/bin/python3 main.py certified
+pixi run certified
 # some hacks
-sudo venv/bin/python3 main.py hack {nodataperm, hidestatusbar}
+pixi run hack {nodataperm, hidestatusbar}
+
+# target Android 11 instead of the default 13
+pixi run install -a 11 gapps
 ```
+
+Each task elevates through `sudo` on its own, so you will be asked for your
+password. **Do not put `sudo` in front of `pixi run`** — that makes root the
+owner of `.pixi/` and breaks every later `pixi install`.
 
 ## Dependencies
 
-"lzip" is required for this script to work, install it using your distribution's package manager:
-### Arch, Manjaro and EndeavourOS based distributions:
-	sudo pacman -S lzip
-### Debian and Ubuntu based distributions:
-	sudo apt install lzip
-### RHEL, Fedora and Rocky based distributions:
-	sudo dnf install lzip
-### openSUSE based distributions:
-	sudo zypper install lzip
+Pixi resolves everything this script needs to be pinned, `lzip` included.
+
+Still expected from your system, because they belong to it rather than to
+this project: `waydroid` itself and an initialized container, `mount`,
+`umount`, `mountpoint`, `e2fsprogs` (`e2fsck`, `resize2fs`) and, only for the
+`mitm` subcommand, `openssl`.
 
 ## Install OpenGapps
 
@@ -57,7 +66,7 @@ sudo venv/bin/python3 main.py hack {nodataperm, hidestatusbar}
 
 Open terminal and switch to the directory where "main.py" is located then run:
 
-    sudo venv/bin/python3 main.py install gapps
+    pixi run install gapps
 
 Then launch waydroid with:
 
@@ -65,7 +74,7 @@ Then launch waydroid with:
 
 After waydroid has finished booting, open terminal and switch to directory where "main.py" is located then run:
 
-    sudo python3 main.py google
+    pixi run certified
 Copy the returned numeric ID, then open ["https://google.com/android/uncertified/?pli=1"](https://google.com/android/uncertified/?pli=1). Enter the ID and register it. Wait 10-20 minutes for device to get registered. Then clear Google Play Service's cache and try logging in!
 
 
@@ -75,7 +84,7 @@ Copy the returned numeric ID, then open ["https://google.com/android/uncertified
 
 Open terminal and switch to directory where "main.py" is located then run:
 
-    sudo venv/bin/python3 main.py install magisk
+    pixi run install magisk
 
 Magisk will be installed on next boot! 
 
@@ -93,7 +102,7 @@ libndk seems to have better performance than libhoudini on AMD.
 
 Open terminal and switch to directory where "main.py" is located then run:
 
-    sudo venv/bin/python3 main.py install libndk
+    pixi run install libndk
 
 ## Install libhoudini arm translation
 
@@ -105,7 +114,7 @@ houdini64 version: 11.0.1b_z.38765.m
 
 Open terminal and switch to directory where "main.py" is located then run:
 
-    sudo venv/bin/python3 main.py install libhoudini
+    pixi run install libhoudini
 
 ## Integrate Widevine DRM (L3)
 
@@ -113,7 +122,7 @@ Open terminal and switch to directory where "main.py" is located then run:
 
 Open terminal and switch to directory where "main.py" is located then run:
 
-    sudo venv/bin/python3 main.py install widevine
+    pixi run install widevine
 
 ## Install Smart Dock
 
@@ -122,13 +131,13 @@ Open terminal and switch to directory where "main.py" is located then run:
 
 Open terminal and switch to directory where "main.py" is located then run:
 
-    sudo venv/bin/python3 main.py install smartdock
+    pixi run install smartdock
 
 ## Install a self-signed CA certificate
 
 Open terminal and switch to directory where "main.py" is located then run:
 
-    sudo venv/bin/python3 main.py install mitm --ca-cert mycert.pem
+    pixi run install mitm --ca-cert mycert.pem
 
 ## Granting full permission for apps data (HACK)
 
@@ -142,9 +151,9 @@ Arknights, PUNISHING: GRAY RAVEN and other games won't freeze on the black scree
 Open terminal and switch to directory where "main.py" is located then run:
 
 ```
-sudo venv/bin/python3 main.py hack nodataperm
+pixi run hack nodataperm
 ```
-**WARNING**: Tested on `lineage-18.1-20230128-VANILLA-waydroid_x86_64.img`. This script will replace `/system/framework/service.jar`, which may prevent WayDroid from booting. If so, run `sudo venv/bin/python3 main.py uninstall nodataperm` to remove it.
+**WARNING**: Tested on `lineage-18.1-20230128-VANILLA-waydroid_x86_64.img`. This script will replace `/system/framework/service.jar`, which may prevent WayDroid from booting. If so, run `pixi run remove nodataperm` to remove it.
 
 
 Or you can run the following commands directly in `sudo waydroid shell`. In this way, every time a new game is installed, you need to run it again, but it's much less risky.
@@ -166,7 +175,7 @@ chmod 777 -R /mnt/*/*/*/*/Android/obb
 ![](assets/7.png)
 
 ```
-sudo venv/bin/python3 main.py install microg
+pixi run install microg
 ```
 
 ## Hide Status Bar
@@ -177,7 +186,7 @@ After
 ![After](assets/9.png)
 
 ```
-sudo venv/bin/python3 main.py hack hidestatusbar
+pixi run hack hidestatusbar
 ```
 
 
@@ -186,7 +195,7 @@ sudo venv/bin/python3 main.py hack hidestatusbar
 You need to register you device with its it before being able to use gapps, this will print out your Android ID which you can use for device registration required for Google apps:
 Open terminal and switch to directory where "main.py" is located then run:
 
-    sudo venv/bin/python3 main.py certified
+    pixi run certified
 
 Star this repository if you find this useful, if you encounter problem create an issue on GitHub!
 

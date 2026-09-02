@@ -1,4 +1,3 @@
-git
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -91,6 +90,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.pixi/
 
 # Spyder project settings
 .spyderproject
