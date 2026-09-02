@@ -1,6 +1,7 @@
 import gzip
 import os
 import platform
+import pwd
 import subprocess
 import sys
 import requests
@@ -10,11 +11,57 @@ import hashlib
 from typing import Iterable, Mapping, Optional
 
 
+def invoking_user() -> str:
+    """Name of the human behind this process, not the root it became.
+
+    os.environ["USER"] used to be indexed directly, which raises KeyError when
+    USER is unset — containers, CI and some systemd contexts do that. Falls
+    back to the passwd entry for the real uid.
+    """
+    user = os.environ.get("SUDO_USER") or os.environ.get("USER")
+    if user:
+        return user
+    return pwd.getpwuid(os.getuid()).pw_name
+
+
+def invoking_user_home() -> str:
+    """Home of the invoking user, from passwd rather than string concatenation.
+
+    The old code built '/home/' + user by hand. That is wrong wherever homes
+    do not live under /home: Fedora Silverblue and the Universal Blue images
+    put them in /var/home, and ublue-os maintains one of the more active forks
+    of this project.
+    """
+    try:
+        return pwd.getpwnam(invoking_user()).pw_dir
+    except KeyError:
+        return os.path.expanduser("~")
+
+
+def give_back_to_user(path: str) -> None:
+    """Hand a path created while root back to the invoking user.
+
+    This program runs as root, so everything it writes under the user's home
+    is owned by root: the user cannot delete their own cache, and any later
+    non-root run trips over it. Applies to the file or directory given; call
+    it for downloads as well as for the directory that holds them.
+
+    A no-op when SUDO_UID is absent, which means the user was already root and
+    there is nobody else to hand ownership to.
+    """
+    uid, gid = os.environ.get("SUDO_UID"), os.environ.get("SUDO_GID")
+    if uid is None or gid is None:
+        return
+    try:
+        os.chown(path, int(uid), int(gid))
+    except (OSError, ValueError) as err:
+        Logger.warning("Could not restore ownership of {}: {}".format(path, err))
+
+
 def get_download_dir():
-    download_loc = ""
     if os.environ.get("XDG_CACHE_HOME", None) is None:
-        download_loc = os.path.join('/', "home", os.environ.get(
-            "SUDO_USER", os.environ["USER"]), ".cache", "waydroid-script", "downloads"
+        download_loc = os.path.join(
+            invoking_user_home(), ".cache", "waydroid-script", "downloads"
         )
     else:
         download_loc = os.path.join(
@@ -22,11 +69,16 @@ def get_download_dir():
         )
     if not os.path.exists(download_loc):
         os.makedirs(download_loc)
+        # Hand back every level this call created, not just the leaf.
+        parent = download_loc
+        for _ in range(3):   # downloads, waydroid-script, .cache
+            give_back_to_user(parent)
+            parent = os.path.dirname(parent)
     return download_loc
 
-# not good
+
 def get_data_dir():
-    return os.path.join('/', "home", os.environ.get("SUDO_USER", os.environ["USER"]), ".local", "share", "waydroid", "data")
+    return os.path.join(invoking_user_home(), ".local", "share", "waydroid", "data")
 
 # execute on host
 def run(args: list, env: Optional[Mapping[str, str]] = None,
@@ -126,6 +178,7 @@ def download_file(url, f_name):
             progress_bar.update(len(data))
             file.write(data)
     progress_bar.close()
+    give_back_to_user(f_name)
     with open(f_name, "rb") as f:
         bytes = f.read()
         md5 = hashlib.md5(bytes).hexdigest()
