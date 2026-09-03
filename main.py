@@ -166,7 +166,10 @@ def hack_option(args):
     hack_list: List[General] = []
     options = args.option_name
     if "nodataperm" in options:
-        hack_list.append(Nodataperm())
+        # Was Nodataperm() with no argument, so it always used the class
+        # default of "11" and quietly ignored -a. remove_app passes the
+        # selected version, so installing and removing could disagree.
+        hack_list.append(Nodataperm(args.android_version))
     if "hidestatusbar" in options:
         hack_list.append(HideStatusBar())
 
