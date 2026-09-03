@@ -5,7 +5,11 @@ Script to add GApps and other stuff to Waydroid!
 # Installation/Usage
 
 This is a maintained fork of [casualsnek/waydroid_script](https://github.com/casualsnek/waydroid_script),
-which has not seen a commit since January 2026.
+which has not seen a commit since January 2026. A survey of all 281 forks on
+2026-09-02 found no active successor: the most starred one has had no commit on
+any branch since August 2023, and the most recently touched one is a single
+commit ahead. This fork exists to keep the project maintained rather than to
+compete with one that already is.
 
 Requires [pixi](https://pixi.sh) 0.55 or newer. Pixi builds the whole
 environment from `pixi.lock`, including `lzip` — so there is no separate
