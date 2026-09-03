@@ -2,6 +2,7 @@ import os
 import re
 import shutil
 from stuff.general import General
+from tools import expiry
 from tools.logger import Logger
 
 
@@ -53,11 +54,37 @@ on property:ro.enable.native.bridge.exec=1
         self.dl_link = self.dl_links[android_version][0]
         self.act_md5 = self.dl_links[android_version][1]
 
+    def warn_if_expired(self, prebuilts_dir):
+        """Say so when the build being installed is past its built-in expiry.
+
+        libhoudini stops translating once the host clock crosses a timestamp
+        compiled into it. The symptom is ARM apps hanging at the splash screen
+        or dying at launch, with Waydroid and x86 apps unaffected and nothing
+        in the logs naming the translator.
+
+        A warning, not a refusal: the user may have a reason to install it
+        anyway, their clock may differ, and refusing would leave them with no
+        translator at all rather than a broken one they can reason about.
+        """
+        for library in ("lib64/libhoudini.so", "lib/libhoudini.so"):
+            path = os.path.join(prebuilts_dir, library)
+            for timestamp in expiry.expired_timestamps_in(path):
+                Logger.warning(
+                    "This libhoudini build stopped working on {}. It has an "
+                    "expiry compiled in, so ARM apps will hang at launch or "
+                    "close immediately while everything else keeps working. "
+                    "Installing anyway; libndk is the alternative that does "
+                    "not expire.".format(expiry.describe(timestamp)))
+                return
+
     def copy(self):
         Logger.info("Copying libhoudini library files ...")
-        name = re.findall("([a-zA-Z0-9]+)\.zip", self.dl_link)[0]
-        shutil.copytree(os.path.join(self.extract_to, "vendor_intel_proprietary_houdini-" + name,
-                        "prebuilts"), os.path.join(self.copy_dir, self.partition), dirs_exist_ok=True)
+        name = re.findall(r"([a-zA-Z0-9]+)\.zip", self.dl_link)[0]
+        prebuilts = os.path.join(
+            self.extract_to, "vendor_intel_proprietary_houdini-" + name, "prebuilts")
+        self.warn_if_expired(prebuilts)
+        shutil.copytree(prebuilts, os.path.join(self.copy_dir, self.partition),
+                        dirs_exist_ok=True)
         init_path = os.path.join(
             self.copy_dir, self.partition, "etc", "init", "houdini.rc")
         if not os.path.isfile(init_path):
