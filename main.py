@@ -68,12 +68,14 @@ def install_app(args):
     if "libndk" in app and "houdini" not in app:
         arch = helper.host()[0]
         if arch == "x86_64":
+            helper.warn_if_translator_mismatched("libndk")
             install_list.append(Ndk(args.android_version))
         else:
             Logger.warning("libndk is not supported on your CPU")
     if "libhoudini" in app and "ndk" not in app:
         arch = helper.host()[0]
         if arch == "x86_64":
+            helper.warn_if_translator_mismatched("libhoudini")
             install_list.append(Houdini(args.android_version))
         else:
             Logger.warning("libhoudini is not supported on your CPU")
