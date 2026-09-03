@@ -202,7 +202,11 @@ def host():
         "armv8l": ("armeabi-v7a", 32)
     }
     if machine in mapping:
-        if mapping[machine] == "x86_64":
+        # Was `mapping[machine] == "x86_64"`, comparing the ("x86_64", 64)
+        # tuple against a string. Always False, so this fallback never ran:
+        # a CPU without SSE4.2 was told it was x86_64 and handed a translation
+        # layer it cannot execute.
+        if machine == "x86_64":
             with open("/proc/cpuinfo") as f:
                 if "sse4_2" not in f.read():
                     Logger.warning("x86_64 CPU does not support SSE4.2, falling back to x86...")
@@ -251,6 +255,51 @@ def tar_lzip_command(archive: str, dest: str) -> list:
     return [env_binary("tar"),
             "--use-compress-program=" + env_binary("lzip"),
             "-xvf", archive, "-C", dest]
+
+
+def cpu_vendor():
+    """"intel", "amd", or None when /proc/cpuinfo says something else.
+
+    Used to tell the user which ARM translation layer suits their CPU. The
+    Waydroid documentation on the ArchWiki puts it plainly: libndk is the one
+    to use on AMD, libhoudini on Intel. libhoudini is Intel's own binary
+    translator, which is why it is the weaker choice on AMD silicon.
+    """
+    try:
+        with open("/proc/cpuinfo") as f:
+            for line in f:
+                if line.startswith("vendor_id"):
+                    vendor = line.split(":", 1)[1].strip()
+                    if vendor == "GenuineIntel":
+                        return "intel"
+                    if vendor == "AuthenticAMD":
+                        return "amd"
+                    return None
+    except OSError:
+        pass
+    return None
+
+
+# Which translator each vendor is documented to prefer. Advice, not a rule:
+# some apps run on one layer and not the other, so trying both is normal.
+PREFERRED_TRANSLATOR = {"intel": "libhoudini", "amd": "libndk"}
+
+
+def warn_if_translator_mismatched(chosen: str):
+    """Say something when the chosen ARM translator is not the documented one.
+
+    Installing Intel's translator on an AMD CPU is a large share of "ARM apps
+    do not work" reports, and nothing in the tool ever mentioned it.
+    """
+    vendor = cpu_vendor()
+    preferred = PREFERRED_TRANSLATOR.get(vendor)
+    if preferred is None or preferred == chosen:
+        return
+    Logger.warning(
+        "{} is recommended on {} CPUs; you are installing {}. It may still "
+        "work, and some apps only run on one of the two, so trying both is "
+        "normal — but if apps crash at launch, try {} first.".format(
+            preferred, vendor.upper(), chosen, preferred))
 
 
 def check_root():
