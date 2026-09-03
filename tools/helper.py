@@ -117,55 +117,60 @@ def run(args: list, env: Optional[Mapping[str, str]] = None,
     return result
 
 # execute on waydroid shell
-def shell(arg: str, env: Optional[str] = None):
-    a = subprocess.Popen(
-        # No "sudo" prefix: check_root() guarantees this process is already
-        # root, and images.py has always called mount/umount/mountpoint
-        # without one. Dropping it keeps every child in the same environment
-        # as the parent instead of sending three of them through sudo's
-        # env_reset.
-        args=["waydroid", "shell"],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
-    )
-    subprocess.Popen(
-        args=["echo", "export BOOTCLASSPATH=/apex/com.android.art/javalib/core-oj.jar:/apex/com.android.art/javalib/core-libart.jar:/apex/com.android.art/javalib/core-icu4j.jar:/apex/com.android.art/javalib/okhttp.jar:/apex/com.android.art/javalib/bouncycastle.jar:/apex/com.android.art/javalib/apache-xml.jar:/system/framework/framework.jar:/system/framework/ext.jar:/system/framework/telephony-common.jar:/system/framework/voip-common.jar:/system/framework/ims-common.jar:/system/framework/framework-atb-backward-compatibility.jar:/apex/com.android.conscrypt/javalib/conscrypt.jar:/apex/com.android.media/javalib/updatable-media.jar:/apex/com.android.mediaprovider/javalib/framework-mediaprovider.jar:/apex/com.android.os.statsd/javalib/framework-statsd.jar:/apex/com.android.permission/javalib/framework-permission.jar:/apex/com.android.sdkext/javalib/framework-sdkextensions.jar:/apex/com.android.wifi/javalib/framework-wifi.jar:/apex/com.android.tethering/javalib/framework-tethering.jar"],
-        stdout=a.stdin,
-        stdin=subprocess.PIPE
-    ).communicate()
+# Exported before every command: `waydroid shell` does not set up the Android
+# environment, so anything that runs on ART needs this on the path.
+_BOOTCLASSPATH = (
+    "/apex/com.android.art/javalib/core-oj.jar:"
+    "/apex/com.android.art/javalib/core-libart.jar:"
+    "/apex/com.android.art/javalib/core-icu4j.jar:"
+    "/apex/com.android.art/javalib/okhttp.jar:"
+    "/apex/com.android.art/javalib/bouncycastle.jar:"
+    "/apex/com.android.art/javalib/apache-xml.jar:"
+    "/system/framework/framework.jar:"
+    "/system/framework/ext.jar:"
+    "/system/framework/telephony-common.jar:"
+    "/system/framework/voip-common.jar:"
+    "/system/framework/ims-common.jar:"
+    "/system/framework/framework-atb-backward-compatibility.jar:"
+    "/apex/com.android.conscrypt/javalib/conscrypt.jar:"
+    "/apex/com.android.media/javalib/updatable-media.jar:"
+    "/apex/com.android.mediaprovider/javalib/framework-mediaprovider.jar:"
+    "/apex/com.android.os.statsd/javalib/framework-statsd.jar:"
+    "/apex/com.android.permission/javalib/framework-permission.jar:"
+    "/apex/com.android.sdkext/javalib/framework-sdkextensions.jar:"
+    "/apex/com.android.wifi/javalib/framework-wifi.jar:"
+    "/apex/com.android.tethering/javalib/framework-tethering.jar"
+)
 
+
+def shell_command(arg: str, env: Optional[str] = None) -> list:
+    """argv that runs `arg` inside the Waydroid container.
+
+    This is the form the Waydroid documentation gives users:
+
+        waydroid shell -- sh -c "<command>"
+
+    `env` is a space separated list of VAR=value assignments, exported before
+    the command runs. `sh -c` also means the command gets ordinary shell
+    behaviour, including glob expansion — which the documented android_id
+    query relies on.
+    """
+    exports = "export BOOTCLASSPATH={}".format(_BOOTCLASSPATH)
     if env:
-        subprocess.Popen(
-            args=["echo", env],
-            stdout=a.stdin,
-            stdin=subprocess.PIPE
-        ).communicate()
+        exports += "; export {}".format(env)
+    return ["waydroid", "shell", "--", "sh", "-c", "{}; {}".format(exports, arg)]
 
-    subprocess.Popen(
-        args=["echo", arg],
-        stdout=a.stdin,
-        stdin=subprocess.PIPE
-    ).communicate()
 
-    # communicate() drains both pipes and waits, which fixes three bugs the
-    # previous version had stacked on top of each other:
-    #   1. it decided failure from stderr instead of the exit code, same as
-    #      run() did;
-    #   2. it called a.stderr.read() twice, so the message it logged was the
-    #      second (always empty) read;
-    #   3. it never waited, so a.returncode was None and the exception read
-    #      "returned non-zero exit status None".
-    out, err = a.communicate()
-    if a.returncode != 0:
-        if err:
-            Logger.error(err.decode("utf-8"))
-        raise subprocess.CalledProcessError(
-            returncode=a.returncode,
-            cmd=a.args,
-            stderr=err
-        )
-    return out.decode("utf-8")
+def shell(arg: str, env: Optional[str] = None):
+    """Run a command inside the Waydroid container and return its stdout.
+
+    Was three subprocess.Popen calls piping `echo` output into the stdin of a
+    fourth. Passing the command as an argument instead is what the docs
+    describe, needs one process, and lets run() report failures the same way
+    it does everywhere else.
+    """
+    return run(shell_command(arg, env)).stdout.decode("utf-8")
+
 
 def download_file(url, f_name):
     md5 = ""
