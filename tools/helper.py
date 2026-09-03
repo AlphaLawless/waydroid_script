@@ -202,7 +202,11 @@ def host():
         "armv8l": ("armeabi-v7a", 32)
     }
     if machine in mapping:
-        if mapping[machine] == "x86_64":
+        # Was `mapping[machine] == "x86_64"`, comparing the ("x86_64", 64)
+        # tuple against a string. Always False, so this fallback never ran:
+        # a CPU without SSE4.2 was told it was x86_64 and handed a translation
+        # layer it cannot execute.
+        if machine == "x86_64":
             with open("/proc/cpuinfo") as f:
                 if "sse4_2" not in f.read():
                     Logger.warning("x86_64 CPU does not support SSE4.2, falling back to x86...")
