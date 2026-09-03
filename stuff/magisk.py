@@ -79,10 +79,20 @@ on property:init.svc.zygote=stopped
         lib_dir = os.path.join(self.extract_to, "lib", self.arch[0])
         for parent, dirnames, filenames in os.walk(lib_dir):
             for filename in filenames:
-                o_path = os.path.join(lib_dir, filename)  
-                filename = re.search('lib(.*)\.so', filename)
+                o_path = os.path.join(lib_dir, filename)
+                filename = re.search(r'lib(.*)\.so', filename)
                 n_path = os.path.join(magisk_absolute_dir, filename.group(1))
                 shutil.copyfile(o_path, n_path)
+                # These are executables (magisk64, magiskinit, magiskpolicy,
+                # magiskboot), not libraries. shutil.copyfile does not carry a
+                # mode, so they land 0644, and nothing downstream adds the bit:
+                # set_path_perm() only ORs 0644 onto paths without a "bin"
+                # component, and OR never turns a bit on that was already off.
+                #
+                # Fixing it here rather than after the fact covers both copies
+                # at once, because setup() reaches /data/adb/magisk through
+                # shutil.copytree, which does preserve mode.
+                os.chmod(n_path, 0o755)
         shutil.copyfile(self.download_loc, os.path.join(magisk_absolute_dir,"magisk.apk") )
         shutil.copytree(os.path.join(self.extract_to, "assets", "chromeos"), os.path.join(magisk_absolute_dir, "chromeos"), dirs_exist_ok=True)
         assets_files = [
