@@ -18,6 +18,7 @@ from stuff.nodataperm import Nodataperm
 from stuff.smartdock import Smartdock
 from stuff.widevine import Widevine
 from stuff.fdroidpriv import FDroidPriv
+from stuff.device_spoof import DeviceSpoof, PROFILES, DEFAULT_PROFILE
 import tools.helper as helper
 from tools import container
 from tools import images
@@ -91,6 +92,10 @@ def install_app(args):
         install_list.append(Mitm(args.ca_cert_file))
     if "fdroidpriv" in app:
         install_list.append(FDroidPriv(args.android_version))
+    if "device_spoof" in app:
+        # Not appended to install_list: it writes properties and touches no
+        # files, so it needs none of the image mounting the others do.
+        DeviceSpoof(getattr(args, "spoof_profile", DEFAULT_PROFILE)).install()
 
     if not container.use_overlayfs():
         copy_dir = "/tmp/waydroid"
@@ -142,6 +147,8 @@ def remove_app(args):
         remove_list.append(Mitm())
     if "fdroidpriv" in app:
         remove_list.append(FDroidPriv(args.android_version))
+    if "device_spoof" in app:
+        DeviceSpoof().uninstall()
     if "nodataperm" in app:
         remove_list.append(Nodataperm(args.android_version))
     if "hidestatusbar" in app:
@@ -220,7 +227,7 @@ def interact():
     if not android_version:
         exit()
     args.android_version = android_version
-    install_choices = ["gapps", "microg", "libndk", "libhoudini", "magisk", "smartdock", "fdroidpriv", "widevine",]
+    install_choices = ["gapps", "microg", "libndk", "libhoudini", "magisk", "smartdock", "fdroidpriv", "widevine", "device_spoof"]
     hack_choices = []
     if android_version == "11":
         hack_choices.extend(["nodataperm", "hidestatusbar"])
@@ -261,6 +268,12 @@ def interact():
                 default="Standard",
             ).execute()
             args.microg_variant = microg_variant
+        if "device_spoof" in apps:
+            args.spoof_profile = inquirer.select(
+                message="Select the device to present as",
+                choices=list(PROFILES.keys()),
+                default=DEFAULT_PROFILE,
+            ).execute()
         args.app = apps
         install_app(args)
     elif action == "Remove":
@@ -326,7 +339,7 @@ def main():
     certified.set_defaults(func=get_certified)
 
     install_choices = ["gapps", "microg", "libndk", "libhoudini",
-                       "magisk", "mitm", "smartdock", "widevine"]
+                       "magisk", "mitm", "smartdock", "widevine", "device_spoof"]
     hack_choices = ["nodataperm", "hidestatusbar"]
     micrg_variants = ["Standard", "NoGoolag", "UNLP", "Minimal", "MinimalIAP"]
     remove_choices = install_choices
@@ -358,6 +371,11 @@ widevine: Add support for widevine DRM L3
                                 dest='ca_cert_file',
                                 help='[for mitm only] The CA certificate file (*.pem) to install',
                                 default=None)
+    install_parser.add_argument('-p', '--spoof-profile',
+                                dest='spoof_profile',
+                                help='[for device_spoof only] Which device to present as',
+                                choices=list(PROFILES.keys()),
+                                default=DEFAULT_PROFILE)
     install_parser.set_defaults(func=install_app)
 
     # remove and its aliases
