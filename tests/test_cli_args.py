@@ -25,7 +25,11 @@ def build_parser():
     block = source[start:end].replace("def main():", "def build():", 1)
     # set_defaults(func=...) references handlers we deliberately do not import
     block = re.sub(r"^\s*\w+\.set_defaults\(func=\w+\)\s*$", "", block, flags=re.M)
-    namespace = {"argparse": argparse}
+    # The parser references these when declaring --spoof-profile, so the
+    # extracted block cannot be exec'd without them.
+    from stuff.device_spoof import DEFAULT_PROFILE, PROFILES
+    namespace = {"argparse": argparse, "PROFILES": PROFILES,
+                 "DEFAULT_PROFILE": DEFAULT_PROFILE}
     exec(block + "    return parser\n", namespace)
     return namespace["build"]()
 
