@@ -1,9 +1,9 @@
-import configparser
 import glob
 import os
 import shutil
 import zipfile
 import hashlib
+from tools import props
 from tools.helper import download_file, get_download_dir, host
 from tools import container
 from tools.logger import Logger
@@ -90,15 +90,7 @@ class General:
                     "on post-fs-data\n    exec u:r:su:s0 root root -- /system/bin/sh /system/bin/resetprop.sh")
             os.chmod(resetprop_rc, 0o644)
 
-        cfg = configparser.ConfigParser()
-        cfg.read("/var/lib/waydroid/waydroid.cfg")
-
-        for key in self.apply_props.keys():
-            if self.apply_props[key]:
-                cfg.set('properties', key, self.apply_props[key])
-
-        with open("/var/lib/waydroid/waydroid.cfg", "w") as f:
-            cfg.write(f)
+        props.set_props(self.apply_props)
 
     def extract_app_lib(self, apk_file_path):
         lib_dest_dir = os.path.dirname(apk_file_path)
@@ -152,14 +144,7 @@ class General:
                 self.set_perm2(path, recursive=True)
 
     def remove_props(self):
-        cfg = configparser.ConfigParser()
-        cfg.read("/var/lib/waydroid/waydroid.cfg")
-
-        for key in self.apply_props.keys():
-            cfg.remove_option('properties', key)
-
-        with open("/var/lib/waydroid/waydroid.cfg", "w") as f:
-            cfg.write(f)
+        props.unset_props(self.apply_props.keys())
 
     def copy(self):
         pass
