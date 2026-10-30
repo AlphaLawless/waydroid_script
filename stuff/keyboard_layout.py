@@ -7,11 +7,23 @@ accents and the extra /? key all come out wrong. The fix inside Android is
 Settings > System > Keyboard > Physical keyboard, and it is lost every time
 the container's data is reset.
 
-Android keeps that choice in /data/system/input-manager-state.xml, one
-<input-device> per keyboard keyed by its descriptor, read by
-PersistentDataStore at boot. This writes that file with the chosen layout
-for every alphabetic keyboard `dumpsys input` reports, keeping a copy of
-the previous file so removing the hack can put it back.
+Waydroid does try to follow the host, and gets it wrong: the HWC takes the
+first word of the XKB layout name ("Portuguese (Brazil)" -> "portuguese")
+and InputManagerService adds keyboard_layout_<that> at boot (vendor patch
+0017-InputManager-Add-default-waydroid-keylayout). That is Portugal's
+layout, which has ç in the same place but no /? key and the accents
+elsewhere. Its add only becomes the current layout when none is set yet,
+so a layout stored here beforehand wins.
+
+Android keeps that choice in /data/system/input-manager-state.xml, read by
+PersistentDataStore at boot. Each <input-device> is keyed by
+InputManagerService.getLayoutDescriptor(): "vendor:V,product:P" when the
+device has a vendor or product id - Waydroid's keyboard is vendor 1,
+product 1 - and the EventHub descriptor only when both are zero. Keying by
+the descriptor alone, which is what `dumpsys input` shows first, is
+silently ignored. This writes that file with the chosen layout for every
+alphabetic keyboard `dumpsys input` reports, keeping a copy of the previous
+file so removing the hack can put it back.
 
 The file is replaced, not merged: Android 12 and later may store it as
 binary XML, which cannot be edited from a shell. On Waydroid it normally
@@ -59,7 +71,8 @@ CLASS_ALPHAKEY = 0x00000002
 CLASS_VIRTUAL = 0x40000000
 
 DEVICE_LINE = re.compile(r"^    (-?\d+): (.*)$")
-FIELD_LINE = re.compile(r"^      (Classes|Descriptor): (.*)$")
+FIELD_LINE = re.compile(r"^      (Classes|Descriptor|Identifier): (.*)$")
+IDENTIFIER = re.compile(r"vendor=0x([0-9a-fA-F]+), product=0x([0-9a-fA-F]+)")
 
 
 def is_alphabetic(classes: str) -> bool:
@@ -78,13 +91,28 @@ def is_alphabetic(classes: str) -> bool:
     return "ALPHAKEY" in flags and "VIRTUAL" not in flags
 
 
-def keyboard_descriptors(dumpsys: str) -> List[str]:
-    """Descriptors of the alphabetic keyboards in `dumpsys input` output.
+def layout_key(descriptor: str, identifier: str) -> str:
+    """The key PersistentDataStore files a device's layouts under.
 
-    Only the Event Hub section is read: it is the one that lists Classes and
-    Descriptor together for each device.
+    Mirrors InputManagerService.getLayoutDescriptor() on Android 11 and 13:
+    vendor and product in decimal when either is non-zero, else the
+    descriptor. `identifier` is the EventHub "Identifier:" line, ids in hex.
     """
-    descriptors = []
+    ids = IDENTIFIER.search(identifier)
+    if ids:
+        vendor, product = int(ids.group(1), 16), int(ids.group(2), 16)
+        if vendor or product:
+            return "vendor:{},product:{}".format(vendor, product)
+    return descriptor
+
+
+def keyboard_layout_keys(dumpsys: str) -> List[str]:
+    """Layout keys of the alphabetic keyboards in `dumpsys input` output.
+
+    Only the Event Hub section is read: it is the one that lists Classes,
+    Identifier and Descriptor together for each device.
+    """
+    keys = []
     in_event_hub = False
     device_id = None
     fields = {}
@@ -93,8 +121,9 @@ def keyboard_descriptors(dumpsys: str) -> List[str]:
         if device_id is not None and device_id >= 0 \
                 and "Descriptor" in fields \
                 and is_alphabetic(fields.get("Classes", "")):
-            if fields["Descriptor"] not in descriptors:
-                descriptors.append(fields["Descriptor"])
+            key = layout_key(fields["Descriptor"], fields.get("Identifier", ""))
+            if key not in keys:
+                keys.append(key)
 
     for line in dumpsys.splitlines():
         if line.startswith("Event Hub State:"):
@@ -113,16 +142,18 @@ def keyboard_descriptors(dumpsys: str) -> List[str]:
         if field and device_id is not None:
             fields[field.group(1)] = field.group(2).strip()
     flush()
-    return descriptors
+    return keys
 
 
-def state_xml(descriptors: List[str], layout: str) -> str:
+def state_xml(keys: List[str], layout: str) -> str:
     layout_descriptor = quoteattr(LAYOUT_PREFIX + layout)
     lines = ["<?xml version='1.0' encoding='utf-8' standalone='yes' ?>",
              "<input-manager-state>",
              "  <input-devices>"]
-    for descriptor in descriptors:
-        lines += ['    <input-device descriptor={}>'.format(quoteattr(descriptor)),
+    for key in keys:
+        # PersistentDataStore calls the key "descriptor" in the file even
+        # when it is "vendor:V,product:P".
+        lines += ['    <input-device descriptor={}>'.format(quoteattr(key)),
                   '      <keyboard-layout descriptor={} current="true" />'.format(
                       layout_descriptor),
                   "    </input-device>"]
@@ -186,21 +217,21 @@ class KeyboardLayout:
             _report(err, "Could not list the input devices from the container.")
             return False
 
-        descriptors = keyboard_descriptors(dumpsys)
-        if not descriptors:
+        keys = keyboard_layout_keys(dumpsys)
+        if not keys:
             Logger.error(
                 "`dumpsys input` reported no physical keyboard. Click inside "
                 "the Waydroid window, press a key and try again.")
             return False
 
         try:
-            shell(write_command(state_xml(descriptors, self.layout)))
+            shell(write_command(state_xml(keys, self.layout)))
         except subprocess.CalledProcessError as err:
             _report(err, "Could not write {}.".format(STATE_FILE))
             return False
 
-        Logger.info("Keyboard layout set to {} for {} keyboard(s).".format(
-            self.layout, len(descriptors)))
+        Logger.info("Keyboard layout set to {} for {}.".format(
+            self.layout, ", ".join(keys)))
         Logger.info(
             "Restart the session to apply: waydroid session stop, then "
             "start Waydroid again.")

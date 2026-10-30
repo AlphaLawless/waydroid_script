@@ -20,7 +20,7 @@ import pytest
 from stuff import keyboard_layout as kl
 from stuff.keyboard_layout import (LAYOUTS, ORIGINAL_FILE, STATE_FILE,
                                    KeyboardLayout, is_alphabetic,
-                                   keyboard_descriptors, state_xml)
+                                   keyboard_layout_keys, layout_key, state_xml)
 
 DUMPSYS_13 = """\
 INPUT MANAGER (dumpsys input)
@@ -44,6 +44,7 @@ Event Hub State:
       Classes: KEYBOARD | ALPHAKEY
       Path: /dev/input/event3
       Enabled: true
+      Identifier: bus=0x0000, vendor=0x0001, product=0x0001, version=0x0000
       Descriptor: 5d2c2cbbc3f9a4a8d3fbc4cba0c3ef0d3f1a5b88
       Location:
 Input Reader State (Nums of device: 3):
@@ -62,6 +63,7 @@ Event Hub State:
     3: Waydroid Keyboard
       Classes: 0x00000003
       Path: /dev/input/event3
+      Identifier: bus=0x0000, vendor=0x0001, product=0x0001, version=0x0000
       Descriptor: 5d2c2cbbc3f9a4a8d3fbc4cba0c3ef0d3f1a5b88
     4: Power Button
       Classes: 0x00000001
@@ -70,7 +72,10 @@ Event Hub State:
 Input Reader State:
 """
 
-KEYBOARD = "5d2c2cbbc3f9a4a8d3fbc4cba0c3ef0d3f1a5b88"
+DESCRIPTOR = "5d2c2cbbc3f9a4a8d3fbc4cba0c3ef0d3f1a5b88"
+# Waydroid's keyboard is vendor 1, product 1, so Android files its
+# layout under this key and never under the descriptor.
+KEYBOARD = "vendor:1,product:1"
 
 
 @pytest.mark.parametrize("classes,expected", [
@@ -92,11 +97,30 @@ def test_is_alphabetic(classes, expected):
 def test_finds_only_the_real_keyboard(dumpsys):
     """Not the virtual keyboard, not the power button, not the touchscreen,
     and nothing from the Input Reader section that follows."""
-    assert keyboard_descriptors(dumpsys) == [KEYBOARD]
+    assert keyboard_layout_keys(dumpsys) == [KEYBOARD]
+
+
+def test_keyed_by_vendor_and_product_not_descriptor():
+    """The regression found on a real device. Keyed by the descriptor the
+    file was valid and Android ignored it, keeping Waydroid's guess."""
+    assert DESCRIPTOR not in keyboard_layout_keys(DUMPSYS_13)
+
+
+@pytest.mark.parametrize("identifier,expected", [
+    ("bus=0x0000, vendor=0x0001, product=0x0001, version=0x0000",
+     "vendor:1,product:1"),
+    # Decimal in the key, hex in dumpsys.
+    ("bus=0x0003, vendor=0x046d, product=0xc52b, version=0x0111",
+     "vendor:1133,product:50475"),
+    ("bus=0x0000, vendor=0x0000, product=0x0000, version=0x0000", "desc"),
+    ("", "desc"),
+])
+def test_layout_key_mirrors_get_layout_descriptor(identifier, expected):
+    assert layout_key("desc", identifier) == expected
 
 
 def test_no_event_hub_section_finds_nothing():
-    assert keyboard_descriptors("Input Reader State:\n  Device 3: x\n") == []
+    assert keyboard_layout_keys("Input Reader State:\n  Device 3: x\n") == []
 
 
 def test_state_xml_is_what_persistent_data_store_reads():
