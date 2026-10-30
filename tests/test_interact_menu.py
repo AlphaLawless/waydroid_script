@@ -37,20 +37,22 @@ def test_the_block_is_where_the_test_expects_it():
 def test_android_11_offers_hack():
     actions, hack_choices = menu_actions("11")
     assert "Hack" in actions
-    assert hack_choices == ["nodataperm", "hidestatusbar"]
+    assert hack_choices == ["keyboard", "nodataperm", "hidestatusbar"]
 
 
-def test_android_13_does_not_offer_hack():
-    """The regression. Offering it led to inquirer.checkbox(choices=[])."""
+def test_android_13_offers_only_the_hacks_that_work_there():
+    """The regression was offering Hack with nothing behind it. nodataperm and
+    hidestatusbar are still Android 11 only; keyboard works on both."""
     actions, hack_choices = menu_actions("13")
-    assert hack_choices == []
-    assert "Hack" not in actions
+    assert hack_choices == ["keyboard"]
+    assert "Hack" in actions
 
 
 @pytest.mark.parametrize("android_version", ["11", "13"])
 def test_the_other_actions_are_always_offered(android_version):
     actions, _ = menu_actions(android_version)
-    for always in ("Install", "Remove", "Get Google Device ID to Get Certified"):
+    for always in ("Install", "Remove", "Get Google Device ID to Get Certified",
+                   "Check clipboard sharing"):
         assert always in actions
 
 

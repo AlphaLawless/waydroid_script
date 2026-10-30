@@ -25,11 +25,12 @@ def build_parser():
     block = source[start:end].replace("def main():", "def build():", 1)
     # set_defaults(func=...) references handlers we deliberately do not import
     block = re.sub(r"^\s*\w+\.set_defaults\(func=\w+\)\s*$", "", block, flags=re.M)
-    # The parser references these when declaring --spoof-profile, so the
-    # extracted block cannot be exec'd without them.
+    # The parser references these when declaring --spoof-profile and
+    # --layout, so the extracted block cannot be exec'd without them.
     from stuff.device_spoof import DEFAULT_PROFILE, PROFILES
+    from stuff.keyboard_layout import LAYOUTS
     namespace = {"argparse": argparse, "PROFILES": PROFILES,
-                 "DEFAULT_PROFILE": DEFAULT_PROFILE}
+                 "DEFAULT_PROFILE": DEFAULT_PROFILE, "LAYOUTS": LAYOUTS}
     exec(block + "    return parser\n", namespace)
     return namespace["build"]()
 
@@ -60,6 +61,8 @@ def test_parser_block_is_where_the_test_expects_it():
     (["uninstall", "-a", "11", "gapps"], "11"),
     (["hack", "-a", "11", "nodataperm"], "11"),
     (["certified", "-a", "11"], "11"),
+    (["clipboard", "-a", "11"], "11"),
+    (["hack", "-a", "11", "keyboard", "-l", "br"], "11"),
 ])
 def test_flag_after_the_subcommand(argv, expected):
     assert parse(argv) == expected

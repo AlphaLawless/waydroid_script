@@ -42,6 +42,7 @@ remove    = "sudo $PIXI_PROJECT_ROOT/.pixi/envs/default/bin/python main.py remov
 uninstall = "sudo $PIXI_PROJECT_ROOT/.pixi/envs/default/bin/python main.py uninstall"
 certified = "sudo $PIXI_PROJECT_ROOT/.pixi/envs/default/bin/python main.py certified"
 hack      = "sudo $PIXI_PROJECT_ROOT/.pixi/envs/default/bin/python main.py hack"
+clipboard = "sudo $PIXI_PROJECT_ROOT/.pixi/envs/default/bin/python main.py clipboard"
 
 [feature.test.tasks]
 test = "pytest -q"
