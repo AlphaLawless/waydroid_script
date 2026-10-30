@@ -46,6 +46,10 @@ pixi run remove {gapps, magisk, libndk, libhoudini, nodataperm, smartdock, micro
 pixi run certified
 # some hacks
 pixi run hack {nodataperm, hidestatusbar}
+# set Android's layout for the host keyboard (e.g. br for ABNT2)
+pixi run hack keyboard -l br
+# find out why copy and paste with the host does not work
+pixi run clipboard
 
 # target Android 11 instead of the default 13
 pixi run install -a 11 gapps

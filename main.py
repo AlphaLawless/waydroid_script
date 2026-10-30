@@ -19,6 +19,8 @@ from stuff.smartdock import Smartdock
 from stuff.widevine import Widevine
 from stuff.fdroidpriv import FDroidPriv
 from stuff.device_spoof import DeviceSpoof, PROFILES, DEFAULT_PROFILE
+from stuff.clipboard import Clipboard
+from stuff.keyboard_layout import KeyboardLayout, LAYOUTS
 import tools.helper as helper
 from tools import container
 from tools import images
@@ -30,6 +32,10 @@ from tools.logger import Logger
 
 def get_certified(args):
     AndroidId().get_id()
+
+
+def check_clipboard(args):
+    Clipboard().check()
 
 
 def mount(partition, copy_dir):
@@ -153,6 +159,11 @@ def remove_app(args):
         remove_list.append(Nodataperm(args.android_version))
     if "hidestatusbar" in app:
         remove_list.append(HideStatusBar())
+    if "keyboard" in app:
+        # Runs against the live container, so before anything below stops it.
+        KeyboardLayout().uninstall()
+        if set(app) == {"keyboard"}:
+            return
 
     if not container.use_overlayfs():
         copy_dir = "/tmp/waydroid"
@@ -181,6 +192,18 @@ def hack_option(args):
         hack_list.append(Nodataperm(args.android_version))
     if "hidestatusbar" in options:
         hack_list.append(HideStatusBar())
+    if "keyboard" in options:
+        layout = getattr(args, "keyboard_layout", None)
+        if layout is None:
+            Logger.error("Choose a layout with -l/--layout, one of: {}".format(
+                ", ".join(LAYOUTS)))
+            return
+        # Not appended to hack_list: it writes Android's own settings through
+        # the running container, needs no image mounted, and has to run
+        # before anything below stops the container.
+        KeyboardLayout(layout).install()
+        if set(options) == {"keyboard"}:
+            return
 
     if not container.use_overlayfs():
         copy_dir = "/tmp/waydroid"
@@ -228,19 +251,21 @@ def interact():
         exit()
     args.android_version = android_version
     install_choices = ["gapps", "microg", "libndk", "libhoudini", "magisk", "smartdock", "fdroidpriv", "widevine", "device_spoof"]
-    hack_choices = []
+    hack_choices = ["keyboard"]
     if android_version == "11":
         hack_choices.extend(["nodataperm", "hidestatusbar"])
 
-    # The hack options only exist for Android 11. Offering the action anyway
-    # led straight to inquirer.checkbox(choices=[]), which raises inside
+    # Most hack options only exist for Android 11. Offering the action with
+    # none led straight to inquirer.checkbox(choices=[]), which raises inside
     # InquirerPy and leaves the user with a traceback instead of a menu.
     # Not offering an action that cannot work is better than explaining
-    # afterwards why it did not.
+    # afterwards why it did not. keyboard works on both versions, so today
+    # the check never hides the action; it stays for the day that changes.
     actions = ["Install", "Remove"]
     if hack_choices:
         actions.append("Hack")
     actions.append("Get Google Device ID to Get Certified")
+    actions.append("Check clipboard sharing")
 
     action = inquirer.select(
         message="Please select an action",
@@ -295,10 +320,18 @@ def interact():
             invalid_message="should be at least 1 selection",
             choices=hack_choices
         ).execute()
+        if "keyboard" in apps:
+            args.keyboard_layout = inquirer.select(
+                message="Select the physical keyboard layout",
+                choices=[Choice(name="{} ({})".format(key, name), value=key)
+                         for key, name in LAYOUTS.items()],
+            ).execute()
         args.option_name = apps
         hack_option(args)
     elif action == "Get Google Device ID to Get Certified":
         AndroidId().get_id()
+    elif action == "Check clipboard sharing":
+        Clipboard().check()
 
 
 def main():
@@ -338,9 +371,14 @@ def main():
         help='Get device ID to obtain Play Store certification')
     certified.set_defaults(func=get_certified)
 
+    clipboard = subparsers.add_parser(
+        'clipboard', parents=[android_version_parser],
+        help='Check what clipboard sharing with the host needs')
+    clipboard.set_defaults(func=check_clipboard)
+
     install_choices = ["gapps", "microg", "libndk", "libhoudini",
                        "magisk", "mitm", "smartdock", "widevine", "device_spoof"]
-    hack_choices = ["nodataperm", "hidestatusbar"]
+    hack_choices = ["nodataperm", "hidestatusbar", "keyboard"]
     micrg_variants = ["Standard", "NoGoolag", "UNLP", "Minimal", "MinimalIAP"]
     remove_choices = install_choices
 
@@ -391,6 +429,11 @@ widevine: Add support for widevine DRM L3
                                         help='Hack the system')
     hack_parser.add_argument(
         'option_name', nargs="+", choices=hack_choices, help='Name of hack option')
+    hack_parser.add_argument('-l', '--layout',
+                             dest='keyboard_layout',
+                             help='[for keyboard only] Physical keyboard layout',
+                             choices=list(LAYOUTS.keys()),
+                             default=None)
     hack_parser.set_defaults(func=hack_option)
 
     args = parser.parse_args()
