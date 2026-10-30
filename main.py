@@ -72,20 +72,12 @@ def install_app(args):
     app = args.app
     if "gapps" in app:
         install_list.append(Gapps(args.android_version))
-    if "libndk" in app and "houdini" not in app:
+    if "libndk" in app:
         arch = helper.host()[0]
         if arch == "x86_64":
-            helper.warn_if_translator_mismatched("libndk")
             install_list.append(Ndk(args.android_version))
         else:
             Logger.warning("libndk is not supported on your CPU")
-    if "libhoudini" in app and "ndk" not in app:
-        arch = helper.host()[0]
-        if arch == "x86_64":
-            helper.warn_if_translator_mismatched("libhoudini")
-            install_list.append(Houdini(args.android_version))
-        else:
-            Logger.warning("libhoudini is not supported on your CPU")
     if "magisk" in app:
         install_list.append(Magisk())
     if "widevine" in app:
@@ -137,9 +129,9 @@ def remove_app(args):
     app = args.app
     if "gapps" in app:
         remove_list.append(Gapps(args.android_version))
-    if "libndk" in app and "houdini" not in app:
+    if "libndk" in app:
         remove_list.append(Ndk(args.android_version))
-    if "libhoudini" in app and "ndk" not in app:
+    if "libhoudini" in app:
         remove_list.append(Houdini(args.android_version))
     if "magisk" in app:
         remove_list.append(Magisk())
@@ -250,7 +242,9 @@ def interact():
     if not android_version:
         exit()
     args.android_version = android_version
-    install_choices = ["gapps", "microg", "libndk", "libhoudini", "magisk", "smartdock", "fdroidpriv", "widevine", "device_spoof"]
+    install_choices = ["gapps", "microg", "libndk", "magisk", "smartdock", "fdroidpriv", "widevine", "device_spoof"]
+    # libhoudini can only be removed: every available build has expired.
+    remove_choices = [*install_choices, "libhoudini"]
     hack_choices = ["keyboard"]
     if android_version == "11":
         hack_choices.extend(["nodataperm", "hidestatusbar"])
@@ -307,7 +301,7 @@ def interact():
             instruction="([\u2191\u2193]: Select Item. [Space]: Toggle Choice), [Enter]: Confirm",
             validate=lambda result: len(result) >= 1,
             invalid_message="should be at least 1 selection",
-            choices=[*install_choices, *hack_choices]
+            choices=[*remove_choices, *hack_choices]
         ).execute()
         args.app = apps
         args.microg_variant="Standard"
@@ -376,11 +370,12 @@ def main():
         help='Check what clipboard sharing with the host needs')
     clipboard.set_defaults(func=check_clipboard)
 
-    install_choices = ["gapps", "microg", "libndk", "libhoudini",
+    install_choices = ["gapps", "microg", "libndk",
                        "magisk", "mitm", "smartdock", "widevine", "device_spoof"]
     hack_choices = ["nodataperm", "hidestatusbar", "keyboard"]
     micrg_variants = ["Standard", "NoGoolag", "UNLP", "Minimal", "MinimalIAP"]
-    remove_choices = install_choices
+    # libhoudini can only be removed: every available build has expired.
+    remove_choices = [*install_choices, "libhoudini"]
 
     arg_template = {
         "dest": "app",
@@ -392,8 +387,7 @@ def main():
     install_help = """
 gapps: Install Open GApps (Android 11) or MindTheGapps (Android 13)
 microg: Add microG, Aurora Store and Aurora Droid to WayDriod
-libndk: Add libndk arm translation, better for AMD CPUs
-libhoudini: Add libhoudini arm translation, better for Intel CPUs
+libndk: Add libndk arm translation
 magisk: Install Magisk Delta to WayDroid
 mitm -c CA_CERT_FILE: Install root CA cert into system trust store
 smartdock: A desktop mode launcher for Android

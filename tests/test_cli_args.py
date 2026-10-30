@@ -93,6 +93,15 @@ def test_default_when_the_flag_is_absent(argv):
     assert parse(argv) == "13"
 
 
+def test_libhoudini_can_be_removed_but_not_installed():
+    """Every available build expired on 2026-08-31. Installing it only breaks
+    ARM apps, but whoever installed it earlier still needs a way out."""
+    parser = build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["install", "libhoudini"])
+    assert parser.parse_args(["remove", "libhoudini"]).app == ["libhoudini"]
+
+
 def test_every_subcommand_accepts_the_flag():
     """Iterates the parser's own subcommands instead of a hand written list,
     so a subcommand added later without parents=[android_version_parser] fails
