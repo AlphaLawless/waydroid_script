@@ -39,7 +39,7 @@ pixi run menu
 
 ```bash
 # install something
-pixi run install {gapps, magisk, libndk, libhoudini, nodataperm, smartdock, microg, mitm}
+pixi run install {gapps, magisk, libndk, nodataperm, smartdock, microg, mitm}
 # remove something (uninstall is an alias)
 pixi run remove {gapps, magisk, libndk, libhoudini, nodataperm, smartdock, microg}
 # get Android device ID
@@ -106,23 +106,21 @@ This script only focuses on Magisk installation, if you need more management, pl
 
 libndk_translation from guybrush firmware. 
 
-libndk seems to have better performance than libhoudini on AMD.
-
 Open terminal and switch to directory where "main.py" is located then run:
 
     pixi run install libndk
 
-## Install libhoudini arm translation
+## libhoudini no longer works
 
-Intel's libhoudini for intel/AMD x86 CPU, pulled from Microsoft's WSA 11 image
+libhoudini, Intel's ARM translator, used to be installable here. Every build
+available for Waydroid has an expiry compiled in, 2026-08-31 00:00 UTC; past
+it ARM apps hang at launch or close immediately. Use libndk instead, on Intel
+and AMD alike.
 
-houdini version: 11.0.1b_y.38765.m
+If you installed it before, remove it and install libndk:
 
-houdini64 version: 11.0.1b_z.38765.m
-
-Open terminal and switch to directory where "main.py" is located then run:
-
-    pixi run install libhoudini
+    pixi run remove libhoudini
+    pixi run install libndk
 
 ## Integrate Widevine DRM (L3)
 

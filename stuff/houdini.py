@@ -1,32 +1,20 @@
-import os
-import re
-import shutil
 from stuff.general import General
-from tools import expiry
-from tools.logger import Logger
 
 
 class Houdini(General):
+    """Removal only: libhoudini can no longer be installed.
+
+    The only builds available (supremegamers, for Android 11 and 13) carry an
+    expiry compiled into libhoudini.so, 2026-08-31 00:00 UTC. Past it ARM apps
+    hang at launch or close immediately, with nothing in the logs naming the
+    translator. There is no newer build to point at, so installing it would
+    only break ARM apps; libndk is the translator that remains.
+
+    The file list and properties stay so `remove libhoudini` can still undo
+    an earlier install.
+    """
     id = "libhoudini"
     partition = "system"
-    dl_links = {
-        "11": ["https://github.com/supremegamers/vendor_intel_proprietary_houdini/archive/81f2a51ef539a35aead396ab7fce2adf89f46e88.zip", "fbff756612b4144797fbc99eadcb6653"],
-        "13": ["https://github.com/supremegamers/vendor_intel_proprietary_houdini/archive/9e77896350caccd228b36b2e1b4a994aa4bd48da.zip", "3807fe029559db3037efe245d9e74270"]
-    }
-    act_md5 = ...
-    dl_link = ...
-    dl_file_name = "libhoudini.zip"
-    extract_to = "/tmp/houdiniunpack"
-    init_rc_component = """
-on early-init
-    mount binfmt_misc binfmt_misc /proc/sys/fs/binfmt_misc
-
-on property:ro.enable.native.bridge.exec=1
-    exec -- /system/bin/sh -c "echo ':arm_exe:M::\\\\x7f\\\\x45\\\\x4c\\\\x46\\\\x01\\\\x01\\\\x01\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x02\\\\x00\\\\x28::/system/bin/houdini:P' > /proc/sys/fs/binfmt_misc/register"
-    exec -- /system/bin/sh -c "echo ':arm_dyn:M::\\\\x7f\\\\x45\\\\x4c\\\\x46\\\\x01\\\\x01\\\\x01\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x03\\\\x00\\\\x28::/system/bin/houdini:P' >> /proc/sys/fs/binfmt_misc/register"
-    exec -- /system/bin/sh -c "echo ':arm64_exe:M::\\\\x7f\\\\x45\\\\x4c\\\\x46\\\\x02\\\\x01\\\\x01\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x02\\\\x00\\\\xb7::/system/bin/houdini64:P' >> /proc/sys/fs/binfmt_misc/register"
-    exec -- /system/bin/sh -c "echo ':arm64_dyn:M::\\\\x7f\\\\x45\\\\x4c\\\\x46\\\\x02\\\\x01\\\\x01\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x00\\\\x03\\\\x00\\\\xb7::/system/bin/houdini64:P' >> /proc/sys/fs/binfmt_misc/register"
-"""
     apply_props = {
         "ro.product.cpu.abilist": "x86_64,x86,arm64-v8a,armeabi-v7a,armeabi",
         "ro.product.cpu.abilist32": "x86,armeabi-v7a,armeabi",
@@ -51,43 +39,3 @@ on property:ro.enable.native.bridge.exec=1
 
     def __init__(self, android_version="11") -> None:
         super().__init__()
-        self.dl_link = self.dl_links[android_version][0]
-        self.act_md5 = self.dl_links[android_version][1]
-
-    def warn_if_expired(self, prebuilts_dir):
-        """Say so when the build being installed is past its built-in expiry.
-
-        libhoudini stops translating once the host clock crosses a timestamp
-        compiled into it. The symptom is ARM apps hanging at the splash screen
-        or dying at launch, with Waydroid and x86 apps unaffected and nothing
-        in the logs naming the translator.
-
-        A warning, not a refusal: the user may have a reason to install it
-        anyway, their clock may differ, and refusing would leave them with no
-        translator at all rather than a broken one they can reason about.
-        """
-        for library in ("lib64/libhoudini.so", "lib/libhoudini.so"):
-            path = os.path.join(prebuilts_dir, library)
-            for timestamp in expiry.expired_timestamps_in(path):
-                Logger.warning(
-                    "This libhoudini build stopped working on {}. It has an "
-                    "expiry compiled in, so ARM apps will hang at launch or "
-                    "close immediately while everything else keeps working. "
-                    "Installing anyway; libndk is the alternative that does "
-                    "not expire.".format(expiry.describe(timestamp)))
-                return
-
-    def copy(self):
-        Logger.info("Copying libhoudini library files ...")
-        name = re.findall(r"([a-zA-Z0-9]+)\.zip", self.dl_link)[0]
-        prebuilts = os.path.join(
-            self.extract_to, "vendor_intel_proprietary_houdini-" + name, "prebuilts")
-        self.warn_if_expired(prebuilts)
-        shutil.copytree(prebuilts, os.path.join(self.copy_dir, self.partition),
-                        dirs_exist_ok=True)
-        init_path = os.path.join(
-            self.copy_dir, self.partition, "etc", "init", "houdini.rc")
-        if not os.path.isfile(init_path):
-            os.makedirs(os.path.dirname(init_path), exist_ok=True)
-        with open(init_path, "w") as initfile:
-            initfile.write(self.init_rc_component)
